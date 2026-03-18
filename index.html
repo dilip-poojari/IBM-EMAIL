@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Management - IBM Cloud</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <header class="top-nav">
+        <div class="nav-left">
+            <div class="logo">
+                <i class="fas fa-cloud"></i>
+                <span>IBM Cloud</span>
+            </div>
+            <div class="breadcrumb">
+                <span>Event Notifications</span>
+                <i class="fas fa-chevron-right"></i>
+                <span>Email Management</span>
+            </div>
+        </div>
+        <div class="nav-right">
+            <button class="icon-btn" title="Notifications">
+                <i class="fas fa-bell"></i>
+            </button>
+            <button class="icon-btn" title="Help">
+                <i class="fas fa-question-circle"></i>
+            </button>
+            <div class="user-menu">
+                <i class="fas fa-user-circle"></i>
+                <span>Admin User</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Left Sidebar Navigation -->
+        <aside class="sidebar">
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-page="home">
+                    <i class="fas fa-home"></i>
+                    <span>Email Home</span>
+                </a>
+                <a href="#" class="nav-item" data-page="domains">
+                    <i class="fas fa-globe"></i>
+                    <span>Domains</span>
+                </a>
+                <a href="#" class="nav-item" data-page="smtp">
+                    <i class="fas fa-server"></i>
+                    <span>SMTP Configuration</span>
+                </a>
+                <a href="#" class="nav-item" data-page="api-email">
+                    <i class="fas fa-code"></i>
+                    <span>API Email</span>
+                </a>
+                <a href="#" class="nav-item" data-page="metrics">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Metrics</span>
+                </a>
+                <a href="#" class="nav-item" data-page="security">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>Security (CBR)</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="content" id="main-content">
+            <!-- Content will be dynamically loaded here -->
+        </main>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
