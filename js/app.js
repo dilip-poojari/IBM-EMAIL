@@ -240,7 +240,7 @@ function showCreateNetworkZone() {
 const PageTemplates = {
     home: () => `
         <div class="page-header">
-            <h1>Email Management</h1>
+            <h1>Email Delivery Management</h1>
             <p>Manage your email domains, SMTP configuration, and monitor email delivery metrics</p>
         </div>
 
@@ -348,7 +348,7 @@ const PageTemplates = {
                     </button>
                     <button class="btn btn-primary" onclick="navigateTo('api-email')">
                         <i class="fas fa-envelope"></i>
-                        Create Email Destination
+                        Setup API Email
                     </button>
                     <button class="btn btn-secondary" onclick="navigateTo('metrics')">
                         <i class="fas fa-chart-bar"></i>
@@ -399,6 +399,12 @@ const PageTemplates = {
         <div class="page-header">
             <h1>Domain Management</h1>
             <p>Add and verify domains for sending emails</p>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-secondary" onclick="navigateTo('security')">
+                    <i class="fas fa-shield-alt"></i>
+                    Manage Context Based Restrictions
+                </button>
+            </div>
         </div>
 
         <div class="card">
@@ -645,7 +651,7 @@ const PageTemplates = {
             <i class="fas fa-info-circle"></i>
             <div class="alert-content">
                 <h4>How API Email Works</h4>
-                <p>API Email uses an event-driven architecture. You create topics, add email destinations, and subscribe users to receive notifications.</p>
+                <p>API Email uses an event-driven architecture. You add domains, create topics with subscriptions, and invite users to receive notifications.</p>
             </div>
         </div>
 
@@ -656,27 +662,21 @@ const PageTemplates = {
             <div class="card-body">
                 <div class="flow-diagram">
                     <div class="flow-step">
-                        <div class="flow-step-icon"><i class="fas fa-envelope"></i></div>
-                        <div class="flow-step-title">1. Create Destination</div>
-                        <div class="flow-step-description">Email destination</div>
+                        <div class="flow-step-icon"><i class="fas fa-globe"></i></div>
+                        <div class="flow-step-title">1. Add Domain</div>
+                        <div class="flow-step-description">Verify your domain</div>
                     </div>
                     <div class="flow-arrow"><i class="fas fa-arrow-right"></i></div>
                     <div class="flow-step">
                         <div class="flow-step-icon"><i class="fas fa-bullhorn"></i></div>
                         <div class="flow-step-title">2. Create Topic</div>
-                        <div class="flow-step-description">Event topic</div>
+                        <div class="flow-step-description">With subscriptions & filters</div>
                     </div>
                     <div class="flow-arrow"><i class="fas fa-arrow-right"></i></div>
                     <div class="flow-step">
-                        <div class="flow-step-icon"><i class="fas fa-link"></i></div>
-                        <div class="flow-step-title">3. Add Subscription</div>
-                        <div class="flow-step-description">Link topic to destination</div>
-                    </div>
-                    <div class="flow-arrow"><i class="fas fa-arrow-right"></i></div>
-                    <div class="flow-step">
-                        <div class="flow-step-icon"><i class="fas fa-users"></i></div>
-                        <div class="flow-step-title">4. Invite Users</div>
-                        <div class="flow-step-description">Add recipients</div>
+                        <div class="flow-step-icon"><i class="fas fa-paper-plane"></i></div>
+                        <div class="flow-step-title">3. Send Events</div>
+                        <div class="flow-step-description">Trigger email delivery</div>
                     </div>
                 </div>
             </div>
@@ -684,70 +684,81 @@ const PageTemplates = {
 
         <div class="card">
             <div class="card-header">
-                <h2 class="card-title">Email Destinations</h2>
-                <button class="btn btn-primary" onclick="showCreateDestination()">
+                <h2 class="card-title">Email Domains</h2>
+                <button class="btn btn-primary" onclick="navigateTo('domains')">
                     <i class="fas fa-plus"></i>
-                    Create Destination
+                    Add Domain
                 </button>
             </div>
             <div class="card-body">
+                ${AppState.domains.filter(d => d.status === 'verified').length > 0 ? `
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
-                                <th>Name</th>
-                                <th>Type</th>
                                 <th>Domain</th>
                                 <th>Status</th>
+                                <th>Added Date</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
+                            ${AppState.domains.filter(d => d.status === 'verified').map(domain => `
                             <tr>
-                                <td><strong>Marketing Emails</strong></td>
-                                <td>Custom Email</td>
-                                <td>example.com</td>
-                                <td><span class="badge badge-success">Active</span></td>
+                                <td><strong>${domain.name}</strong></td>
+                                <td><span class="badge badge-success">Verified</span></td>
+                                <td>${domain.addedDate}</td>
                                 <td>
-                                    <button class="btn btn-sm btn-ghost">
-                                        <i class="fas fa-edit"></i>
-                                        Edit
+                                    <button class="btn btn-sm btn-ghost" onclick="viewDomainDetails('${domain.name}')">
+                                        <i class="fas fa-eye"></i>
+                                        View
                                     </button>
                                 </td>
                             </tr>
-                            <tr>
-                                <td><strong>Transactional Emails</strong></td>
-                                <td>Custom Email</td>
-                                <td>example.com</td>
-                                <td><span class="badge badge-success">Active</span></td>
-                                <td>
-                                    <button class="btn btn-sm btn-ghost">
-                                        <i class="fas fa-edit"></i>
-                                        Edit
-                                    </button>
-                                </td>
-                            </tr>
+                            `).join('')}
                         </tbody>
                     </table>
                 </div>
+                ` : `
+                <div class="empty-state">
+                    <div class="empty-state-icon">
+                        <i class="fas fa-globe"></i>
+                    </div>
+                    <h3 class="empty-state-title">No verified domains</h3>
+                    <p class="empty-state-description">Add and verify a domain to use API Email</p>
+                    <button class="btn btn-primary" onclick="navigateTo('domains')">
+                        <i class="fas fa-plus"></i>
+                        Add Domain
+                    </button>
+                </div>
+                `}
             </div>
         </div>
 
         <div class="card">
             <div class="card-header">
-                <h2 class="card-title">Topics</h2>
+                <h2 class="card-title">Topics & Subscriptions</h2>
                 <button class="btn btn-primary" onclick="showCreateTopic()">
                     <i class="fas fa-plus"></i>
                     Create Topic
                 </button>
             </div>
             <div class="card-body">
+                <div class="alert alert-info" style="margin-bottom: 1.5rem;">
+                    <i class="fas fa-info-circle"></i>
+                    <div class="alert-content">
+                        <h4>Consolidated Topic Management</h4>
+                        <p>When creating a topic, you can configure subscriptions, invite users, and set up filters all in one place.</p>
+                    </div>
+                </div>
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
                                 <th>Topic Name</th>
+                                <th>Domain</th>
                                 <th>Subscriptions</th>
+                                <th>Recipients</th>
                                 <th>Created</th>
                                 <th>Actions</th>
                             </tr>
@@ -755,23 +766,40 @@ const PageTemplates = {
                         <tbody>
                             <tr>
                                 <td><strong>user-signup</strong></td>
-                                <td>3 subscriptions</td>
+                                <td>example.com</td>
+                                <td><span class="badge badge-success">3 active</span></td>
+                                <td>15 users</td>
                                 <td>2026-03-10</td>
                                 <td>
                                     <button class="btn btn-sm btn-ghost">
-                                        <i class="fas fa-eye"></i>
-                                        View
+                                        <i class="fas fa-edit"></i>
+                                        Edit
                                     </button>
                                 </td>
                             </tr>
                             <tr>
                                 <td><strong>password-reset</strong></td>
-                                <td>1 subscription</td>
+                                <td>example.com</td>
+                                <td><span class="badge badge-success">1 active</span></td>
+                                <td>8 users</td>
                                 <td>2026-03-12</td>
                                 <td>
                                     <button class="btn btn-sm btn-ghost">
-                                        <i class="fas fa-eye"></i>
-                                        View
+                                        <i class="fas fa-edit"></i>
+                                        Edit
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>order-confirmation</strong></td>
+                                <td>example.com</td>
+                                <td><span class="badge badge-success">2 active</span></td>
+                                <td>25 users</td>
+                                <td>2026-03-15</td>
+                                <td>
+                                    <button class="btn btn-sm btn-ghost">
+                                        <i class="fas fa-edit"></i>
+                                        Edit
                                     </button>
                                 </td>
                             </tr>
