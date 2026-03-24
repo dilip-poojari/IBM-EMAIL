@@ -7,6 +7,8 @@ const AppState = {
     keyManagementStatus: 'not-configured', // not-configured, configured
     wizardStep: 1,
     selectedDomain: '',
+    sandboxMode: false, // Sandbox Mode toggle
+    apiSandboxMode: false, // API Email Sandbox Mode
     domains: [
         { name: 'example.com', status: 'verified', addedDate: '2026-03-10' },
         { name: 'test.com', status: 'pending', addedDate: '2026-03-15' }
@@ -16,6 +18,13 @@ const AppState = {
         username: 'smtp_user_12345',
         password: 'P@ssw0rd!2024',
         endpoint: 'smtp.ibmcloud.com',
+        port: '587'
+    },
+    sandboxCredentials: {
+        apiKey: 'sandbox_key_demo_instance_abc123',
+        username: 'sandbox_user_abc123',
+        password: 'sandbox_pass_xyz789',
+        endpoint: 'sandbox.smtp.ibmcloud.com',
         port: '587'
     },
     metrics: {
@@ -31,8 +40,33 @@ const AppState = {
             delivered: 8721,
             failed: 45,
             bounced: 166
+        },
+        sandbox: {
+            sent: 45,
+            captured: 45,
+            testInboxCount: 12
         }
-    }
+    },
+    testInbox: [
+        {
+            id: 'msg_001',
+            from: 'test@example.com',
+            to: 'user@example.com',
+            subject: 'Test Email 1',
+            timestamp: '2026-03-24T10:30:00Z',
+            preview: 'This is a test email sent via Sandbox Mode...',
+            status: 'captured'
+        },
+        {
+            id: 'msg_002',
+            from: 'test@example.com',
+            to: 'admin@example.com',
+            subject: 'Test Email 2',
+            timestamp: '2026-03-24T11:15:00Z',
+            preview: 'Another test email for validation...',
+            status: 'captured'
+        }
+    ]
 };
 
 // Initialize app on page load
@@ -209,6 +243,28 @@ function requestSMTPAccess() {
         AppState.smtpStatus = 'enabled';
         loadPage('smtp');
     }, 3000);
+
+// Sandbox Mode Functions
+function toggleSandboxMode() {
+    AppState.sandboxMode = !AppState.sandboxMode;
+    loadPage('smtp');
+}
+
+function toggleAPISandboxMode() {
+    AppState.apiSandboxMode = !AppState.apiSandboxMode;
+    loadPage('api-email');
+}
+
+function viewTestInbox() {
+    alert('Test Inbox: ' + AppState.testInbox.length + ' messages captured');
+}
+
+function viewTestMessage(messageId) {
+    const message = AppState.testInbox.find(m => m.id === messageId);
+    if (message) {
+        alert(`Message: ${message.subject}\nFrom: ${message.from}\nTo: ${message.to}\n\n${message.preview}`);
+    }
+}
 }
 
 // Metrics Functions
@@ -481,7 +537,116 @@ const PageTemplates = {
             <p>Configure SMTP for direct email sending</p>
         </div>
 
-        ${AppState.domains.filter(d => d.status === 'verified').length === 0 ? `
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Sandbox Mode</h2>
+                <label class="toggle-switch">
+                    <input type="checkbox" ${AppState.sandboxMode ? 'checked' : ''} onchange="toggleSandboxMode()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="card-body">
+                ${AppState.sandboxMode ? `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div class="alert-content">
+                        <h4>Sandbox Mode Enabled</h4>
+                        <p>Emails will NOT be delivered to real recipients. All messages are captured in the Test Inbox. Switch to Production Mode before sending to customers.</p>
+                    </div>
+                </div>
+                <p style="margin-bottom: 1rem;">Test your email configuration safely without sending to real recipients. Emails sent in Sandbox Mode are captured and available in the Test Inbox for inspection.</p>
+                
+                <div class="credentials-section">
+                    <div class="credential-item">
+                        <div>
+                            <div class="credential-label">Sandbox Hostname</div>
+                            <div class="credential-value">
+                                <span>${AppState.sandboxCredentials.endpoint}</span>
+                                <button class="btn btn-sm btn-ghost" onclick="copyToClipboard('${AppState.sandboxCredentials.endpoint}', 'sandbox-host-copy')">
+                                    <i class="fas fa-copy" id="sandbox-host-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="credential-item">
+                        <div>
+                            <div class="credential-label">Port</div>
+                            <div class="credential-value">
+                                <span>${AppState.sandboxCredentials.port} (STARTTLS)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="credential-item">
+                        <div>
+                            <div class="credential-label">Sandbox API Key</div>
+                            <div class="credential-value">
+                                <span id="sandbox-api-key-value" class="credential-hidden">••••••••••••••••</span>
+                                <button class="btn btn-sm btn-ghost" onclick="toggleCredential('sandbox-api-key')">
+                                    <i class="fas fa-eye" id="sandbox-api-key-icon"></i>
+                                </button>
+                                <button class="btn btn-sm btn-ghost" onclick="copyToClipboard('${AppState.sandboxCredentials.apiKey}', 'sandbox-api-key-copy')">
+                                    <i class="fas fa-copy" id="sandbox-api-key-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="credential-item">
+                        <div>
+                            <div class="credential-label">Sandbox Username</div>
+                            <div class="credential-value">
+                                <span>${AppState.sandboxCredentials.username}</span>
+                                <button class="btn btn-sm btn-ghost" onclick="copyToClipboard('${AppState.sandboxCredentials.username}', 'sandbox-user-copy')">
+                                    <i class="fas fa-copy" id="sandbox-user-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 1.5rem;">
+                    <button class="btn btn-primary" onclick="viewTestInbox()">
+                        <i class="fas fa-inbox"></i>
+                        View Test Inbox (${AppState.testInbox.length} messages)
+                    </button>
+                    <a href="SANDBOX_MODE.md" target="_blank" class="btn btn-secondary" style="margin-left: 0.5rem;">
+                        <i class="fas fa-book"></i>
+                        View Documentation
+                    </a>
+                </div>
+
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle"></i>
+                    <div class="alert-content">
+                        <h4>Sandbox Metrics</h4>
+                        <p>Sent: ${AppState.metrics.sandbox.sent} | Captured: ${AppState.metrics.sandbox.captured} | Test Inbox: ${AppState.metrics.sandbox.testInboxCount} messages</p>
+                    </div>
+                </div>
+                ` : `
+                <p style="margin-bottom: 1rem;">Enable Sandbox Mode to test your email configuration safely without sending to real recipients. Emails sent in Sandbox Mode are captured and available in the Test Inbox for inspection.</p>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <div class="alert-content">
+                        <h4>What is Sandbox Mode?</h4>
+                        <ul style="margin: 0.5rem 0 0 1.5rem;">
+                            <li>Test email templates and configurations safely</li>
+                            <li>No domain verification or DNS configuration required</li>
+                            <li>Emails are captured, not delivered externally</li>
+                            <li>View captured emails in the Test Inbox</li>
+                            <li>Free - no charges for sandbox sends</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="toggleSandboxMode()" style="margin-top: 1rem;">
+                    <i class="fas fa-flask"></i>
+                    Enable Sandbox Mode
+                </button>
+                `}
+            </div>
+        </div>
+
+        ${AppState.domains.filter(d => d.status === 'verified').length === 0 && !AppState.sandboxMode ? `
         <div class="alert alert-warning">
             <i class="fas fa-exclamation-triangle"></i>
             <div class="alert-content">
@@ -645,6 +810,99 @@ const PageTemplates = {
         <div class="page-header">
             <h1>API Email (Custom Email)</h1>
             <p>Event-driven email sending through topics and subscriptions</p>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Sandbox Mode</h2>
+                <label class="toggle-switch">
+                    <input type="checkbox" ${AppState.apiSandboxMode ? 'checked' : ''} onchange="toggleAPISandboxMode()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="card-body">
+                ${AppState.apiSandboxMode ? `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div class="alert-content">
+                        <h4>API Sandbox Mode Enabled</h4>
+                        <p>Emails will NOT be delivered to real recipients. Set <code>ibmensandbox: true</code> in your API requests. All messages are captured in the Test Inbox.</p>
+                    </div>
+                </div>
+                <p style="margin-bottom: 1rem;">Test your API email integration safely. Use the sandbox domain <code>sandbox.mail.ibmcloud.com</code> for all API requests.</p>
+                
+                <div class="dns-records">
+                    <div class="dns-record">
+                        <div class="dns-record-content">
+                            <div class="dns-field">
+                                <span class="dns-field-label">Sandbox Domain:</span>
+                                <span class="dns-field-value">sandbox.mail.ibmcloud.com</span>
+                            </div>
+                            <div class="dns-field">
+                                <span class="dns-field-label">API Parameter:</span>
+                                <span class="dns-field-value">ibmensandbox: true</span>
+                            </div>
+                            <div class="dns-field">
+                                <span class="dns-field-label">From Address:</span>
+                                <span class="dns-field-value">noreply@sandbox.mail.ibmcloud.com</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 1.5rem;">
+                    <button class="btn btn-primary" onclick="viewTestInbox()">
+                        <i class="fas fa-inbox"></i>
+                        View Test Inbox (${AppState.testInbox.length} messages)
+                    </button>
+                    <a href="SANDBOX_MODE.md#api-email-sandbox-mode" target="_blank" class="btn btn-secondary" style="margin-left: 0.5rem;">
+                        <i class="fas fa-book"></i>
+                        API Documentation
+                    </a>
+                </div>
+
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-lightbulb"></i>
+                    <div class="alert-content">
+                        <h4>Example API Request</h4>
+                        <pre style="background: #f4f4f4; padding: 1rem; border-radius: 4px; overflow-x: auto; margin-top: 0.5rem;"><code>{
+  "specversion": "1.0",
+  "id": "test-001",
+  "source": "my-app/testing",
+  "type": "com.ibm.cloud.email.test",
+  "ibmensandbox": true,
+  "data": {
+    "to": ["user@example.com"],
+    "from": "noreply@sandbox.mail.ibmcloud.com",
+    "subject": "Test Email",
+    "body": "This is a test email."
+  }
+}</code></pre>
+                    </div>
+                </div>
+                ` : `
+                <p style="margin-bottom: 1rem;">Enable Sandbox Mode to test your API email integration safely without sending to real recipients. Perfect for development and CI/CD pipelines.</p>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <div class="alert-content">
+                        <h4>API Sandbox Benefits</h4>
+                        <ul style="margin: 0.5rem 0 0 1.5rem;">
+                            <li>Test API integration without domain verification</li>
+                            <li>No DKIM or SPF configuration required</li>
+                            <li>Inspect full email content and headers</li>
+                            <li>Validate email templates and data</li>
+                            <li>Free testing - no charges for sandbox API calls</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="toggleAPISandboxMode()" style="margin-top: 1rem;">
+                    <i class="fas fa-flask"></i>
+                    Enable API Sandbox Mode
+                </button>
+                `}
+            </div>
         </div>
 
         <div class="alert alert-info">
