@@ -813,12 +813,12 @@ const PageTemplates = {
             </div>
         </div>
 
-        ${AppState.domains.filter(d => d.status === 'verified').length === 0 && !AppState.sandboxMode ? `
+        ${AppState.domains.filter(d => d.dkimVerified && d.spfVerified).length === 0 && !AppState.sandboxMode ? `
         <div class="alert alert-warning">
             <i class="fas fa-exclamation-triangle"></i>
             <div class="alert-content">
                 <h4>No Verified Domains</h4>
-                <p>You need to verify at least one domain before configuring SMTP. <a href="#" onclick="navigateTo('domains'); return false;" style="color: inherit; text-decoration: underline;">Add a domain now</a></p>
+                <p>You need to verify at least one domain (DKIM & SPF) before configuring SMTP. <a href="#" onclick="navigateTo('domains'); return false;" style="color: inherit; text-decoration: underline;">Add and verify a domain now</a></p>
             </div>
         </div>
         ` : ''}
@@ -832,10 +832,18 @@ const PageTemplates = {
                     <label class="form-label">Choose a verified domain</label>
                     <select class="form-input" id="smtp-domain-select" onchange="selectSMTPDomain(this.value)">
                         <option value="">Select a domain...</option>
-                        ${AppState.domains.filter(d => d.status === 'verified').map(domain => `
-                        <option value="${domain.name}" ${AppState.selectedDomain === domain.name ? 'selected' : ''}>${domain.name}</option>
+                        ${AppState.domains.filter(d => d.dkimVerified && d.spfVerified).map(domain => `
+                        <option value="${domain.name}" ${AppState.selectedDomain === domain.name ? 'selected' : ''}>
+                            ${domain.name} ${domain.description ? `(${domain.description})` : ''} - ${domain.status === 'ready' ? 'Ready' : domain.status === 'partially-ready' ? 'Partially Ready' : 'Unverified'}
+                        </option>
                         `).join('')}
                     </select>
+                    ${AppState.domains.filter(d => d.dkimVerified && d.spfVerified).length === 0 ? `
+                    <div class="form-helper" style="color: var(--warning); margin-top: 0.5rem;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        No verified domains available. Please verify a domain first.
+                    </div>
+                    ` : ''}
                 </div>
             </div>
         </div>
@@ -1116,7 +1124,7 @@ const PageTemplates = {
                 </button>
             </div>
             <div class="card-body">
-                ${AppState.domains.filter(d => d.status === 'verified').length > 0 ? `
+                ${AppState.domains.filter(d => d.dkimVerified && d.spfVerified).length > 0 ? `
                 <div class="table-container">
                     <table>
                         <thead>
@@ -1128,10 +1136,20 @@ const PageTemplates = {
                             </tr>
                         </thead>
                         <tbody>
-                            ${AppState.domains.filter(d => d.status === 'verified').map(domain => `
+                            ${AppState.domains.filter(d => d.dkimVerified && d.spfVerified).map(domain => `
                             <tr>
                                 <td><strong>${domain.name}</strong></td>
-                                <td><span class="badge badge-success">Verified</span></td>
+                                <td>
+                                    <span class="badge ${
+                                        domain.status === 'ready' ? 'badge-success' :
+                                        domain.status === 'partially-ready' ? 'badge-warning' :
+                                        'badge-error'
+                                    }">
+                                        ${domain.status === 'ready' ? 'Ready' :
+                                          domain.status === 'partially-ready' ? 'Partially Ready' :
+                                          'Unverified'}
+                                    </span>
+                                </td>
                                 <td>${domain.addedDate}</td>
                                 <td>
                                     <button class="btn btn-sm btn-ghost" onclick="viewDomainDetails('${domain.name}')">
@@ -1150,7 +1168,7 @@ const PageTemplates = {
                         <i class="fas fa-globe"></i>
                     </div>
                     <h3 class="empty-state-title">No verified domains</h3>
-                    <p class="empty-state-description">Add and verify a domain to use API Email</p>
+                    <p class="empty-state-description">Add and verify a domain (DKIM & SPF) to use API Email</p>
                     <button class="btn btn-primary" onclick="navigateTo('domains')">
                         <i class="fas fa-plus"></i>
                         Add Domain
