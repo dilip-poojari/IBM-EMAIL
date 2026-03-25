@@ -45,9 +45,29 @@ const AppState = {
         }
     ],
     domains: [
-        { name: 'example.com', status: 'verified', addedDate: '2026-03-10' },
-        { name: 'test.com', status: 'pending', addedDate: '2026-03-15' }
+        {
+            name: 'example.com',
+            description: 'Production domain',
+            status: 'ready', // unverified, partially-ready, ready
+            addedDate: '2026-03-10',
+            dkimVerified: true,
+            spfVerified: true,
+            smtpAuthorized: true,
+            cbrConfigured: true
+        },
+        {
+            name: 'test.com',
+            description: 'Testing domain',
+            status: 'partially-ready',
+            addedDate: '2026-03-15',
+            dkimVerified: true,
+            spfVerified: true,
+            smtpAuthorized: false,
+            cbrConfigured: true
+        }
     ],
+    currentVerifyingDomain: null,
+    verificationStep: 1, // 1: DKIM/SPF, 2: SMTP Auth, 3: CBR
     smtpCredentials: {
         apiKey: 'demo_api_key_xxxxxxxxxxxxxxxxxxxxx',
         username: 'smtp_user_12345',
@@ -550,33 +570,27 @@ const PageTemplates = {
 
     domains: () => `
         <div class="page-header">
-            <h1>Domain Management</h1>
-            <p>Add and verify domains for sending emails</p>
-            <div style="margin-top: 1rem;">
-                <button class="btn btn-secondary" onclick="navigateTo('security')">
-                    <i class="fas fa-shield-alt"></i>
-                    Manage Context Based Restrictions
-                </button>
+            <div>
+                <h1>Domain Management</h1>
+                <p>Add and verify domains for sending emails via API and SMTP</p>
             </div>
+            <button class="btn btn-primary" onclick="openAddDomainModal()">
+                <i class="fas fa-plus"></i>
+                Add Domain
+            </button>
         </div>
 
+        ${AppState.domains.length > 0 ? `
         <div class="card">
-            <div class="card-header">
-                <h2 class="card-title">Your Domains</h2>
-                <button class="btn btn-primary" onclick="startDomainSetup()">
-                    <i class="fas fa-plus"></i>
-                    Add Domain
-                </button>
-            </div>
             <div class="card-body">
-                ${AppState.domains.length > 0 ? `
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
-                                <th>Domain</th>
+                                <th>Domain Name</th>
+                                <th>Description</th>
                                 <th>Status</th>
-                                <th>Added Date</th>
+                                <th>Created Date</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -584,47 +598,103 @@ const PageTemplates = {
                             ${AppState.domains.map(domain => `
                             <tr>
                                 <td><strong>${domain.name}</strong></td>
+                                <td>${domain.description || '-'}</td>
                                 <td>
-                                    <span class="badge ${domain.status === 'verified' ? 'badge-success' : domain.status === 'pending' ? 'badge-pending' : 'badge-error'}">
-                                        ${domain.status.charAt(0).toUpperCase() + domain.status.slice(1)}
+                                    <span class="badge ${
+                                        domain.status === 'ready' ? 'badge-success' :
+                                        domain.status === 'partially-ready' ? 'badge-warning' :
+                                        'badge-error'
+                                    }">
+                                        ${domain.status === 'ready' ? 'Ready' :
+                                          domain.status === 'partially-ready' ? 'Partially Ready' :
+                                          'Unverified'}
                                     </span>
                                 </td>
                                 <td>${domain.addedDate}</td>
                                 <td>
-                                    ${domain.status === 'pending' ? `
-                                    <button class="btn btn-sm btn-secondary" onclick="verifyDomain('${domain.name}')">
-                                        <i class="fas fa-check"></i>
-                                        Verify
-                                    </button>
-                                    ` : ''}
-                                    <button class="btn btn-sm btn-ghost" onclick="viewDomainDetails('${domain.name}')">
-                                        <i class="fas fa-eye"></i>
-                                        View
-                                    </button>
+                                    <div class="action-menu">
+                                        <button class="btn-icon" onclick="toggleActionMenu(event, '${domain.name}')">
+                                            <i class="fas fa-ellipsis-v"></i>
+                                        </button>
+                                        <div class="action-menu-dropdown" id="menu-${domain.name}">
+                                            <button onclick="startDomainVerification('${domain.name}')">
+                                                <i class="fas fa-check-circle"></i>
+                                                Verify
+                                            </button>
+                                            <button onclick="viewDomainDetails('${domain.name}')">
+                                                <i class="fas fa-eye"></i>
+                                                View Details
+                                            </button>
+                                            <button onclick="deleteDomain('${domain.name}')" class="text-error">
+                                                <i class="fas fa-trash"></i>
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
                                 </td>
                             </tr>
                             `).join('')}
                         </tbody>
                     </table>
                 </div>
-                ` : `
+            </div>
+        </div>
+        ` : `
+        <div class="card">
+            <div class="card-body">
                 <div class="empty-state">
                     <div class="empty-state-icon">
                         <i class="fas fa-globe"></i>
                     </div>
                     <h3 class="empty-state-title">No domains added yet</h3>
                     <p class="empty-state-description">Add your first domain to start sending emails</p>
-                    <button class="btn btn-primary" onclick="startDomainSetup()">
+                    <button class="btn btn-primary" onclick="openAddDomainModal()">
                         <i class="fas fa-plus"></i>
                         Add Domain
                     </button>
                 </div>
-                `}
+            </div>
+        </div>
+        `}
+
+        <!-- Add Domain Modal -->
+        <div id="add-domain-modal" class="modal">
+            <div class="modal-content modal-sm">
+                <div class="modal-header">
+                    <h2>Add Domain</h2>
+                    <button class="btn-close" onclick="closeAddDomainModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Name *</label>
+                        <input type="text" class="form-input" id="domain-name-input" placeholder="My Domain">
+                        <div class="form-helper">A friendly name for this domain</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-input" id="domain-description-input" placeholder="Production email domain">
+                        <div class="form-helper">Optional description</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Domain *</label>
+                        <input type="text" class="form-input" id="domain-url-input" placeholder="mail.yourcompany.com">
+                        <div class="form-helper">Enter your domain without http:// or www</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" onclick="closeAddDomainModal()">Cancel</button>
+                    <button class="btn btn-primary" onclick="createDomain()">Create</button>
+                </div>
             </div>
         </div>
 
-        <div id="domain-wizard" class="hidden">
-            ${getDomainWizardHTML()}
+        <!-- Domain Verification Flow -->
+        <div id="domain-verification-modal" class="modal">
+            <div class="modal-content modal-lg">
+                ${getDomainVerificationHTML()}
+            </div>
         </div>
     `,
 
@@ -1439,144 +1509,391 @@ const PageTemplates = {
 };
 
 // Domain Wizard HTML Generator
-function getDomainWizardHTML() {
-    const step = AppState.wizardStep;
+function getDomainVerificationHTML() {
+    if (!AppState.currentVerifyingDomain) return '';
+    
+    const domain = AppState.domains.find(d => d.name === AppState.currentVerifyingDomain);
+    if (!domain) return '';
+    
+    const step = AppState.verificationStep;
     
     return `
-        <div class="wizard">
-            <div class="wizard-header">
-                <h2>Add Domain</h2>
-                <div class="wizard-steps">
-                    <div class="wizard-step ${step >= 1 ? 'active' : ''} ${step > 1 ? 'completed' : ''}">
-                        <div class="wizard-step-number">${step > 1 ? '✓' : '1'}</div>
-                        <div class="wizard-step-label">Enter Domain</div>
+        <div class="modal-header">
+            <div>
+                <h2>Verify Domain: ${domain.name}</h2>
+                <span class="badge ${
+                    domain.status === 'ready' ? 'badge-success' :
+                    domain.status === 'partially-ready' ? 'badge-warning' :
+                    'badge-error'
+                }" style="margin-left: 1rem;">
+                    ${domain.status === 'ready' ? 'Ready' :
+                      domain.status === 'partially-ready' ? 'Partially Ready' :
+                      'Unverified'}
+                </span>
+            </div>
+            <button class="btn-close" onclick="closeDomainVerification()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <!-- Vertical Stepper -->
+            <div class="verification-stepper">
+                <!-- Step 1: DKIM & SPF -->
+                <div class="verification-step ${step >= 1 ? 'active' : ''} ${domain.dkimVerified && domain.spfVerified ? 'completed' : ''}">
+                    <div class="step-indicator">
+                        <div class="step-icon">
+                            ${domain.dkimVerified && domain.spfVerified ? '<i class="fas fa-check"></i>' : '1'}
+                        </div>
+                        <div class="step-line"></div>
                     </div>
-                    <div class="wizard-step ${step >= 2 ? 'active' : ''} ${step > 2 ? 'completed' : ''}">
-                        <div class="wizard-step-number">${step > 2 ? '✓' : '2'}</div>
-                        <div class="wizard-step-label">DNS Records</div>
-                    </div>
-                    <div class="wizard-step ${step >= 3 ? 'active' : ''}">
-                        <div class="wizard-step-number">3</div>
-                        <div class="wizard-step-label">Verify</div>
+                    <div class="step-content">
+                        <div class="step-header" onclick="expandVerificationStep(1)">
+                            <div>
+                                <h3>DKIM & SPF Verification</h3>
+                                <p class="step-subtitle">Mandatory — Required for API and SMTP email sending</p>
+                            </div>
+                            <span class="badge ${domain.dkimVerified && domain.spfVerified ? 'badge-success' : 'badge-error'}">
+                                ${domain.dkimVerified && domain.spfVerified ? 'Verified' : 'Not Verified'}
+                            </span>
+                        </div>
+                        <div class="step-body ${step === 1 ? 'expanded' : ''}">
+                            <p class="step-instruction">Add these DNS records to your domain provider's DNS settings, then return here to verify.</p>
+                            
+                            <div class="dns-record-card">
+                                <div class="dns-record-header">
+                                    <span class="dns-record-type">DKIM Record</span>
+                                    <button class="btn btn-sm btn-ghost" onclick="copyDNSValue('dkim')">
+                                        <i class="fas fa-copy"></i> Copy
+                                    </button>
+                                </div>
+                                <div class="dns-record-fields">
+                                    <div class="dns-field">
+                                        <span class="dns-label">Type:</span>
+                                        <code class="dns-value">TXT</code>
+                                    </div>
+                                    <div class="dns-field">
+                                        <span class="dns-label">Hostname:</span>
+                                        <code class="dns-value">ibmcloud._domainkey.${domain.name}</code>
+                                    </div>
+                                    <div class="dns-field">
+                                        <span class="dns-label">Value:</span>
+                                        <code class="dns-value">v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC...</code>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="dns-record-card">
+                                <div class="dns-record-header">
+                                    <span class="dns-record-type">SPF Record</span>
+                                    <button class="btn btn-sm btn-ghost" onclick="copyDNSValue('spf')">
+                                        <i class="fas fa-copy"></i> Copy
+                                    </button>
+                                </div>
+                                <div class="dns-record-fields">
+                                    <div class="dns-field">
+                                        <span class="dns-label">Type:</span>
+                                        <code class="dns-value">TXT</code>
+                                    </div>
+                                    <div class="dns-field">
+                                        <span class="dns-label">Hostname:</span>
+                                        <code class="dns-value">@</code>
+                                    </div>
+                                    <div class="dns-field">
+                                        <span class="dns-label">Value:</span>
+                                        <code class="dns-value">v=spf1 include:_spf.ibmcloud.com ~all</code>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="btn btn-primary" onclick="verifyDKIMSPF('${domain.name}')" ${domain.dkimVerified && domain.spfVerified ? 'disabled' : ''}>
+                                <i class="fas fa-check-circle"></i>
+                                Verify DNS Records
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="wizard-body">
-                ${step === 1 ? `
-                    <h3>Enter Your Domain</h3>
-                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">Enter the domain you want to use for sending emails.</p>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Domain Name</label>
-                        <input type="text" class="form-input" id="domain-input" placeholder="example.com" value="${AppState.selectedDomain}">
-                        <div class="form-helper">Enter your domain without http:// or www</div>
-                    </div>
-                ` : step === 2 ? `
-                    <h3>Add DNS Records</h3>
-                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">Add the following DNS records to your domain to verify ownership and enable email sending.</p>
-                    
-                    <div class="dns-records">
-                        <div class="dns-record">
-                            <div class="dns-record-header">
-                                <span class="dns-record-type">SPF Record</span>
-                                <button class="copy-btn" onclick="copyDNSRecord('spf')">
-                                    <i class="fas fa-copy"></i> Copy
-                                </button>
-                            </div>
-                            <div class="dns-record-content">
-                                <div class="dns-field">
-                                    <span class="dns-field-label">Type:</span>
-                                    <span class="dns-field-value">TXT</span>
-                                </div>
-                                <div class="dns-field">
-                                    <span class="dns-field-label">Name:</span>
-                                    <span class="dns-field-value">@</span>
-                                </div>
-                                <div class="dns-field">
-                                    <span class="dns-field-label">Value:</span>
-                                    <span class="dns-field-value">v=spf1 include:_spf.ibmcloud.com ~all</span>
-                                </div>
-                            </div>
-                        </div>
 
-                        <div class="dns-record">
-                            <div class="dns-record-header">
-                                <span class="dns-record-type">DKIM Record</span>
-                                <button class="copy-btn" onclick="copyDNSRecord('dkim')">
-                                    <i class="fas fa-copy"></i> Copy
-                                </button>
-                            </div>
-                            <div class="dns-record-content">
-                                <div class="dns-field">
-                                    <span class="dns-field-label">Type:</span>
-                                    <span class="dns-field-value">TXT</span>
-                                </div>
-                                <div class="dns-field">
-                                    <span class="dns-field-label">Name:</span>
-                                    <span class="dns-field-value">ibmcloud._domainkey</span>
-                                </div>
-                                <div class="dns-field">
-                                    <span class="dns-field-label">Value:</span>
-                                    <span class="dns-field-value">v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC...</span>
-                                </div>
-                            </div>
+                <!-- Step 2: SMTP Authorization -->
+                <div class="verification-step ${step >= 2 ? 'active' : ''} ${domain.smtpAuthorized ? 'completed' : ''}">
+                    <div class="step-indicator">
+                        <div class="step-icon">
+                            ${domain.smtpAuthorized ? '<i class="fas fa-check"></i>' : '2'}
                         </div>
+                        <div class="step-line"></div>
                     </div>
+                    <div class="step-content">
+                        <div class="step-header" onclick="expandVerificationStep(2)">
+                            <div>
+                                <h3>SMTP Authorization</h3>
+                                <p class="step-subtitle">Optional — Required only for SMTP email sending</p>
+                            </div>
+                            <span class="badge ${domain.smtpAuthorized ? 'badge-success' : 'badge-warning'}">
+                                ${domain.smtpAuthorized ? 'Approved' : 'Not Verified'}
+                            </span>
+                        </div>
+                        <div class="step-body ${step === 2 ? 'expanded' : ''}">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                <div>
+                                    <strong>SMTP Authorization Required</strong>
+                                    <p>To send emails via SMTP, you must raise a support ticket for authorization. This typically takes 24-48 hours for approval.</p>
+                                </div>
+                            </div>
 
-                    <div class="alert alert-info mt-3">
-                        <i class="fas fa-info-circle"></i>
-                        <div class="alert-content">
-                            <h4>DNS Propagation</h4>
-                            <p>After adding these records to your DNS provider, it may take up to 48 hours for the changes to propagate. However, verification usually succeeds within a few minutes.</p>
+                            ${!domain.smtpAuthorized ? `
+                                <button class="btn btn-primary" onclick="raiseSMTPTicket('${domain.name}')">
+                                    <i class="fas fa-ticket-alt"></i>
+                                    Raise Support Ticket
+                                </button>
+                            ` : `
+                                <div class="alert alert-success">
+                                    <i class="fas fa-check-circle"></i>
+                                    <div>
+                                        <strong>SMTP Authorized</strong>
+                                        <p>Your domain is authorized for SMTP email sending.</p>
+                                    </div>
+                                </div>
+                            `}
+
+                            ${!domain.smtpAuthorized && !domain.cbrConfigured ? `
+                                <div class="alert alert-warning mt-3">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <div>
+                                        <strong>Warning</strong>
+                                        <p>SMTP email sending will not work until authorization is approved. Complete this step if you plan to use SMTP.</p>
+                                    </div>
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
-                ` : `
-                    ${AppState.domainStatus === 'pending' ? `
-                        <div class="flex-center" style="flex-direction: column; padding: 2rem;">
-                            <div class="spinner"></div>
-                            <h3 style="margin-top: 2rem;">Verifying Domain...</h3>
-                            <p style="color: var(--text-secondary); text-align: center; margin-top: 1rem;">
-                                We're checking your DNS records. This may take a few moments.
-                            </p>
+                </div>
+
+                <!-- Step 3: CBR Configuration -->
+                <div class="verification-step ${step >= 3 ? 'active' : ''} ${domain.cbrConfigured ? 'completed' : ''}">
+                    <div class="step-indicator">
+                        <div class="step-icon">
+                            ${domain.cbrConfigured ? '<i class="fas fa-check"></i>' : '3'}
                         </div>
-                    ` : AppState.domainStatus === 'verified' ? `
-                        <div class="flex-center" style="flex-direction: column; padding: 2rem;">
-                            <i class="fas fa-check-circle" style="font-size: 5rem; color: var(--success);"></i>
-                            <h3 style="margin-top: 2rem;">Domain Verified Successfully!</h3>
-                            <p style="color: var(--text-secondary); text-align: center; margin-top: 1rem;">
-                                Your domain <strong>${AppState.selectedDomain}</strong> has been verified and is ready to send emails.
-                            </p>
+                    </div>
+                    <div class="step-content">
+                        <div class="step-header" onclick="expandVerificationStep(3)">
+                            <div>
+                                <h3>Context-Based Restrictions (CBR)</h3>
+                                <p class="step-subtitle">Mandatory for SMTP — Configure access rules</p>
+                            </div>
+                            <span class="badge ${domain.cbrConfigured ? 'badge-success' : 'badge-error'}">
+                                ${domain.cbrConfigured ? 'Configured' : 'Not Configured'}
+                            </span>
                         </div>
-                    ` : `
-                        <div class="flex-center" style="flex-direction: column; padding: 2rem;">
-                            <i class="fas fa-times-circle" style="font-size: 5rem; color: var(--error);"></i>
-                            <h3 style="margin-top: 2rem;">Verification Failed</h3>
-                            <p style="color: var(--text-secondary); text-align: center; margin-top: 1rem;">
-                                We couldn't verify your domain. Please check that you've added the DNS records correctly.
-                            </p>
+                        <div class="step-body ${step === 3 ? 'expanded' : ''}">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                <div>
+                                    <strong>Secure SMTP Access</strong>
+                                    <p>To securely send emails via SMTP, you must configure Context-Based Restrictions (e.g., allowed IPs, network zones).</p>
+                                </div>
+                            </div>
+
+                            ${!domain.cbrConfigured ? `
+                                <button class="btn btn-primary" onclick="setupCBR('${domain.name}')">
+                                    <i class="fas fa-shield-alt"></i>
+                                    Setup CBR
+                                </button>
+                                <button class="btn btn-ghost" onclick="navigateTo('security'); closeDomainVerification();">
+                                    <i class="fas fa-external-link-alt"></i>
+                                    View Setup Guide
+                                </button>
+                            ` : `
+                                <div class="alert alert-success">
+                                    <i class="fas fa-check-circle"></i>
+                                    <div>
+                                        <strong>CBR Configured</strong>
+                                        <p>Context-Based Restrictions are configured for this domain.</p>
+                                    </div>
+                                </div>
+                                <button class="btn btn-ghost" onclick="navigateTo('security'); closeDomainVerification();">
+                                    <i class="fas fa-cog"></i>
+                                    Manage CBR Settings
+                                </button>
+                            `}
+
+                            ${!domain.cbrConfigured && domain.smtpAuthorized ? `
+                                <div class="alert alert-warning mt-3">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <div>
+                                        <strong>Warning</strong>
+                                        <p>SMTP email sending will not work until CBR is configured. Complete this step if you plan to use SMTP.</p>
+                                    </div>
+                                </div>
+                            ` : ''}
                         </div>
-                    `}
-                `}
-            </div>
-            <div class="wizard-footer">
-                <button class="btn btn-ghost" onclick="closeWizard()">
-                    ${AppState.domainStatus === 'verified' ? 'Close' : 'Cancel'}
-                </button>
-                <div class="flex gap-2">
-                    ${step > 1 && AppState.domainStatus !== 'verified' ? `
-                    <button class="btn btn-secondary" onclick="previousWizardStep()">
-                        <i class="fas fa-arrow-left"></i>
-                        Previous
-                    </button>
-                    ` : ''}
-                    ${step < 3 ? `
-                    <button class="btn btn-primary" onclick="nextWizardStep()">
-                        Next
-                        <i class="fas fa-arrow-right"></i>
-                    </button>
-                    ` : ''}
+                    </div>
                 </div>
             </div>
         </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeDomainVerification()">Close</button>
+        </div>
     `;
+}
+
+// New Domain Management Functions
+function openAddDomainModal() {
+    document.getElementById('add-domain-modal').classList.add('show');
+    document.getElementById('domain-name-input').value = '';
+    document.getElementById('domain-description-input').value = '';
+    document.getElementById('domain-url-input').value = '';
+}
+
+function closeAddDomainModal() {
+    document.getElementById('add-domain-modal').classList.remove('show');
+}
+
+function createDomain() {
+    const name = document.getElementById('domain-name-input').value.trim();
+    const description = document.getElementById('domain-description-input').value.trim();
+    const domainUrl = document.getElementById('domain-url-input').value.trim();
+    
+    if (!name || !domainUrl) {
+        alert('Please fill in all required fields');
+        return;
+    }
+    
+    // Check if domain already exists
+    if (AppState.domains.find(d => d.name === domainUrl)) {
+        alert('This domain already exists');
+        return;
+    }
+    
+    // Add new domain
+    AppState.domains.push({
+        name: domainUrl,
+        description: description,
+        status: 'unverified',
+        addedDate: new Date().toISOString().split('T')[0],
+        dkimVerified: false,
+        spfVerified: false,
+        smtpAuthorized: false,
+        cbrConfigured: false
+    });
+    
+    closeAddDomainModal();
+    loadPage('domains');
+    
+    // Show success message
+    setTimeout(() => {
+        alert(`Domain "${domainUrl}" created successfully! Click "Verify" to start the verification process.`);
+    }, 300);
+}
+
+function toggleActionMenu(event, domainName) {
+    event.stopPropagation();
+    const menu = document.getElementById(`menu-${domainName}`);
+    
+    // Close all other menus
+    document.querySelectorAll('.action-menu-dropdown').forEach(m => {
+        if (m !== menu) m.classList.remove('show');
+    });
+    
+    menu.classList.toggle('show');
+}
+
+// Close menus when clicking outside
+document.addEventListener('click', () => {
+    document.querySelectorAll('.action-menu-dropdown').forEach(m => {
+        m.classList.remove('show');
+    });
+});
+
+function startDomainVerification(domainName) {
+    AppState.currentVerifyingDomain = domainName;
+    AppState.verificationStep = 1;
+    document.getElementById('domain-verification-modal').classList.add('show');
+    loadPage('domains');
+}
+
+function closeDomainVerification() {
+    AppState.currentVerifyingDomain = null;
+    document.getElementById('domain-verification-modal').classList.remove('show');
+    loadPage('domains');
+}
+
+function expandVerificationStep(stepNumber) {
+    AppState.verificationStep = stepNumber;
+    loadPage('domains');
+}
+
+function copyDNSValue(type) {
+    const domain = AppState.domains.find(d => d.name === AppState.currentVerifyingDomain);
+    if (!domain) return;
+    
+    const values = {
+        dkim: `v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC...`,
+        spf: `v=spf1 include:_spf.ibmcloud.com ~all`
+    };
+    
+    copyToClipboard(values[type]);
+}
+
+function verifyDKIMSPF(domainName) {
+    const domain = AppState.domains.find(d => d.name === domainName);
+    if (!domain) return;
+    
+    // Simulate verification
+    setTimeout(() => {
+        domain.dkimVerified = true;
+        domain.spfVerified = true;
+        updateDomainStatus(domain);
+        loadPage('domains');
+        alert('DNS records verified successfully!');
+    }, 1500);
+}
+
+function raiseSMTPTicket(domainName) {
+    const domain = AppState.domains.find(d => d.name === domainName);
+    if (!domain) return;
+    
+    // Simulate ticket creation
+    if (confirm(`Raise a support ticket for SMTP authorization for domain "${domainName}"?\n\nThis will open a support form. Approval typically takes 24-48 hours.`)) {
+        setTimeout(() => {
+            domain.smtpAuthorized = true;
+            updateDomainStatus(domain);
+            loadPage('domains');
+            alert('Support ticket raised successfully! You will be notified once approved (typically 24-48 hours).');
+        }, 1000);
+    }
+}
+
+function setupCBR(domainName) {
+    const domain = AppState.domains.find(d => d.name === domainName);
+    if (!domain) return;
+    
+    // Simulate CBR setup
+    if (confirm(`Configure Context-Based Restrictions for domain "${domainName}"?\n\nThis will set up access rules for secure SMTP sending.`)) {
+        setTimeout(() => {
+            domain.cbrConfigured = true;
+            updateDomainStatus(domain);
+            loadPage('domains');
+            alert('CBR configured successfully!');
+        }, 1000);
+    }
+}
+
+function updateDomainStatus(domain) {
+    if (domain.dkimVerified && domain.spfVerified && domain.smtpAuthorized && domain.cbrConfigured) {
+        domain.status = 'ready';
+    } else if (domain.dkimVerified && domain.spfVerified && domain.cbrConfigured) {
+        domain.status = 'ready'; // API ready
+    } else if (domain.dkimVerified && domain.spfVerified) {
+        domain.status = 'partially-ready';
+    } else {
+        domain.status = 'unverified';
+    }
+}
+
+function deleteDomain(domainName) {
+    if (confirm(`Are you sure you want to delete domain "${domainName}"?`)) {
+        AppState.domains = AppState.domains.filter(d => d.name !== domainName);
+        loadPage('domains');
+    }
 }
