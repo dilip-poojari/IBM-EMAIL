@@ -9,6 +9,41 @@ const AppState = {
     selectedDomain: '',
     sandboxMode: false, // Sandbox Mode toggle
     apiSandboxMode: false, // API Email Sandbox Mode
+    instances: [
+        {
+            id: 'en-instance-001',
+            name: 'Production Email Service',
+            region: 'us-south',
+            plan: 'Standard',
+            status: 'active',
+            created: '2026-01-15',
+            domains: 2,
+            topics: 5,
+            subscriptions: 12
+        },
+        {
+            id: 'en-instance-002',
+            name: 'Development Email Service',
+            region: 'us-east',
+            plan: 'Lite',
+            status: 'active',
+            created: '2026-02-20',
+            domains: 1,
+            topics: 3,
+            subscriptions: 5
+        },
+        {
+            id: 'en-instance-003',
+            name: 'Staging Email Service',
+            region: 'eu-gb',
+            plan: 'Standard',
+            status: 'active',
+            created: '2026-03-01',
+            domains: 1,
+            topics: 4,
+            subscriptions: 8
+        }
+    ],
     domains: [
         { name: 'example.com', status: 'verified', addedDate: '2026-03-10' },
         { name: 'test.com', status: 'pending', addedDate: '2026-03-15' }
@@ -410,6 +445,68 @@ const PageTemplates = {
                         <i class="fas fa-chart-bar"></i>
                         View Metrics
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Event Notifications Instances</h2>
+                <button class="btn btn-primary" onclick="alert('Create new instance functionality')">
+                    <i class="fas fa-plus"></i>
+                    Create Instance
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Instance Name</th>
+                                <th>Instance ID</th>
+                                <th>Region</th>
+                                <th>Plan</th>
+                                <th>Status</th>
+                                <th>Domains</th>
+                                <th>Topics</th>
+                                <th>Subscriptions</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${AppState.instances.map(instance => `
+                            <tr>
+                                <td><strong>${instance.name}</strong></td>
+                                <td><code style="font-size: 0.75rem; background: #f4f4f4; padding: 0.25rem 0.5rem; border-radius: 3px;">${instance.id}</code></td>
+                                <td>${instance.region}</td>
+                                <td><span class="badge ${instance.plan === 'Standard' ? 'badge-success' : 'badge-neutral'}">${instance.plan}</span></td>
+                                <td><span class="badge badge-success">${instance.status.charAt(0).toUpperCase() + instance.status.slice(1)}</span></td>
+                                <td style="text-align: center;">${instance.domains}</td>
+                                <td style="text-align: center;">${instance.topics}</td>
+                                <td style="text-align: center;">${instance.subscriptions}</td>
+                                <td>${instance.created}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-ghost" onclick="alert('View instance: ${instance.name}')">
+                                        <i class="fas fa-eye"></i>
+                                        View
+                                    </button>
+                                    <button class="btn btn-sm btn-ghost" onclick="alert('Manage instance: ${instance.name}')">
+                                        <i class="fas fa-cog"></i>
+                                        Manage
+                                    </button>
+                                </td>
+                            </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle"></i>
+                    <div class="alert-content">
+                        <h4>About Instances</h4>
+                        <p>Each Event Notifications instance provides isolated email delivery management. You can create multiple instances for different environments (production, staging, development) or organizational units.</p>
+                    </div>
                 </div>
             </div>
         </div>
